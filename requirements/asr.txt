@@ -1,0 +1,4 @@
+# ReazonSpeech needs numpy<2: its ctc_segmentation wheel is built against 1.x
+numpy<2
+faster-whisper
+reazonspeech-espnet-asr @ git+https://github.com/reazon-research/ReazonSpeech.git#subdirectory=pkg/espnet-asr

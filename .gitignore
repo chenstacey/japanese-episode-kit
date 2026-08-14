@@ -1,0 +1,11 @@
+# environments and data built by setup.sh (~2 GB) — never committed
+.venv-asr/
+.venv-nlp/
+.venv-mlx/
+dict/
+out/
+scripts/yt-dlp
+
+.DS_Store
+__pycache__/
+*.pyc
