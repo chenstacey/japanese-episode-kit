@@ -20,6 +20,7 @@ Output, in `out/ep02/`:
 | `furigana.json` | readings per word + definitions per dictionary form |
 | `audio.m4a` | mono AAC, normalised for reliable playback |
 | `segments.json` | three proposed stretches for close study, and the words in them |
+| `subtitles.parts/` | only after `translate.py export` — lines staged for translation |
 | `episode.json` | manifest tying them together |
 
 ## Input

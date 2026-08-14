@@ -7,7 +7,7 @@ description: Turn a Japanese audio source into study material — a timed SRT tr
 
 Produces, from one audio source:
 
-- `subtitles.srt` — Japanese transcript with timings
+- `subtitles.srt` — Japanese transcript with timings (Chinese too, once translated)
 - `furigana.json` — kana readings per word, plus Chinese/English definitions
 - `audio.m4a` — normalized audio (mono AAC), safe to play on iOS
 - `segments.json` — three proposed stretches for close study, and the words in them
@@ -86,6 +86,45 @@ returns transcription errors and character names, so a word must also carry a
 dictionary entry and not be an interjection; and a word that *is* in the
 dictionary can still be a name (直人 is glossed "male given name"), which this
 does not catch.
+
+## Adding Chinese translations
+
+A transcribed episode is Japanese-only — speech recognition produces one
+language. Viewers show the Japanese line with the Chinese underneath, and that
+second line stays empty until it is filled in. **You do the translating**; the
+script only takes the lines out and puts them back.
+
+```bash
+python scripts/translate.py export out/ep03/subtitles.srt
+```
+
+That writes `out/ep03/subtitles.parts/part1.txt`, `part2.txt`, … — 150 lines
+each, numbered, with the format rules at the top of every file.
+
+For each part: read it, translate every line, and write your translation to
+`partN.zh.txt` **in the same directory**, one line per input line, as
+`编号. 中文翻译`. Then:
+
+```bash
+python scripts/translate.py import out/ep03/subtitles.srt
+```
+
+It reports how many lines each part supplied and rewrites the srt with the
+Chinese in `<i>` tags. Rerun the import after fixing a part; it replaces rather
+than appends.
+
+Rules that matter more than they look:
+
+- **Numbering is the only thing tying a translation to its line.** Do not
+  merge, split, skip or renumber. Numbering restarts at 1 in every part.
+- **Translate line by line, not scene by scene.** A line cut off mid-sentence
+  should stay cut off in Chinese; the viewer shows it against that exact
+  moment of audio, and a tidied-up full sentence will not line up.
+- **A part that comes back short is not fatal.** The import fills in what it
+  has and leaves the rest blank. Say which parts were incomplete.
+
+Nothing else needs rebuilding afterwards: the Japanese is untouched, so the
+furigana pack and the study segments stay valid.
 
 ## Useful flags
 
