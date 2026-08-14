@@ -47,15 +47,42 @@ def is_url(source: str) -> bool:
     return source.startswith(("http://", "https://"))
 
 
-def fetch_existing_subtitles(source: str, workdir: Path, langs: str) -> Path | None:
+def site_args(source: str, cookies_browser: str | None) -> list:
+    """Per-site flags that decide whether extraction works at all.
+
+    YouTube: the default web client is refused outright ("The page needs to be
+    reloaded") since YouTube began forcing SABR streaming; the android client
+    still resolves.
+
+    Bilibili: returns 412 Precondition Failed to anonymous requests no matter
+    what User-Agent is sent. Only real browser cookies get through, so pass
+    --cookies-from-browser and stay logged in there.
+    """
+    args = []
+    if "youtube.com" in source or "youtu.be" in source:
+        args += ["--extractor-args", "youtube:player_client=android"]
+    if cookies_browser:
+        args += ["--cookies-from-browser", cookies_browser]
+    elif "bilibili.com" in source:
+        print("      note: bilibili blocks anonymous requests — "
+              "pass --cookies-from-browser chrome if this fails")
+    return args
+
+
+def fetch_existing_subtitles(source: str, workdir: Path, langs: str,
+                             cookies_browser: str | None) -> Path | None:
     """Grab a caption track the site already has, if there is one.
 
     This is why browser tools produce subtitles instantly while a local
     transcription takes minutes: on YouTube and similar they are not
-    recognising speech at all, just downloading the existing track. Recognising
-    is the slow fallback, not the first move.
+    recognising speech at all, just downloading the existing track.
 
-    Netflix and other DRM-protected services are out of reach here — their
+    It only helps when a real caption track exists. Reuploaded or fansubbed
+    video usually carries its subtitles burned into the picture, and Bilibili
+    in particular often advertises only a `danmaku` track — comments, not
+    dialogue — which is useless here. Those all fall through to transcription.
+
+    DRM-protected services (Netflix and similar) are out of reach: their
     subtitles need an authenticated, decrypted session.
     """
     if not shutil.which("yt-dlp"):
@@ -66,10 +93,13 @@ def fetch_existing_subtitles(source: str, workdir: Path, langs: str) -> Path | N
         ["yt-dlp", "--skip-download", "--write-subs", "--write-auto-subs",
          "--sub-langs", langs, "--convert-subs", "srt",
          "--no-playlist", "--quiet", "--no-warnings",
+         *site_args(source, cookies_browser),
          "-o", str(workdir / "subs.%(ext)s"), source],
         capture_output=True, text=True)
 
-    found = sorted(workdir.glob("subs*.srt"))
+    # danmaku is a comment stream, not dialogue
+    found = [f for f in sorted(workdir.glob("subs*.srt"))
+             if "danmaku" not in f.name.lower()]
     if found:
         # a human-made track beats an auto-generated one
         manual = [f for f in found if "auto" not in f.name.lower()]
@@ -77,18 +107,22 @@ def fetch_existing_subtitles(source: str, workdir: Path, langs: str) -> Path | N
     if result.returncode != 0:
         detail = (result.stderr or "").strip().splitlines()
         if detail:
-            print(f"      (no subtitle track: {detail[-1][:90]})")
+            print(f"      (no usable track: {detail[-1][:90]})")
     return None
 
 
-def download_audio(source: str, workdir: Path) -> Path:
+def download_audio(source: str, workdir: Path,
+                   cookies_browser: str | None, part: int | None) -> Path:
     if not shutil.which("yt-dlp"):
         sys.exit("yt-dlp is needed for URLs\n  run: bash scripts/setup.sh")
 
     print(f"      downloading audio")
     target = workdir / "download.%(ext)s"
+    # a bilibili page is often several parts; without --part take just the first
+    selection = ["--playlist-items", str(part)] if part else ["--no-playlist"]
     run(["yt-dlp", "-f", "bestaudio/best", "-o", str(target),
-         "--no-playlist", "--quiet", "--progress", source])
+         *selection, "--quiet", "--progress",
+         *site_args(source, cookies_browser), source])
 
     downloaded = sorted(workdir.glob("download.*"))
     if not downloaded:
@@ -210,6 +244,11 @@ def main():
                     help="transcribe even if the source has a subtitle track")
     ap.add_argument("--sub-langs", default="ja,ja-*",
                     help="subtitle languages to look for (default: ja,ja-*)")
+    ap.add_argument("--cookies-from-browser", dest="cookies_browser",
+                    help="read cookies from this browser (chrome, firefox…); "
+                         "bilibili refuses anonymous requests without it")
+    ap.add_argument("--part", type=int,
+                    help="which part of a multi-part video (1-based)")
     ap.add_argument("--no-furigana", action="store_true")
     ap.add_argument("--bitrate", default="96k")
     ap.add_argument("--start", help="ffmpeg -ss, e.g. 00:01:30")
@@ -230,12 +269,13 @@ def main():
         existing_subs = None
         if is_url(args.input) and not args.srt and not args.force_asr:
             print("[1/3] resolving source")
-            existing_subs = fetch_existing_subtitles(args.input, tmpdir, args.sub_langs)
+            existing_subs = fetch_existing_subtitles(
+                args.input, tmpdir, args.sub_langs, args.cookies_browser)
             if existing_subs:
                 print(f"      found a subtitle track — skipping transcription")
 
-        source = download_audio(args.input, tmpdir) if is_url(args.input) \
-            else resolve_local(args.input)
+        source = download_audio(args.input, tmpdir, args.cookies_browser, args.part) \
+            if is_url(args.input) else resolve_local(args.input)
 
         slug = args.slug or source.stem.replace(" ", "-").lower()
         title = args.title or source.stem

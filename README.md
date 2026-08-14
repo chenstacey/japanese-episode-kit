@@ -37,6 +37,16 @@ already there.
 DRM-protected services (Netflix and similar) are out of scope; their subtitles
 require an authenticated, decrypted session.
 
+### Site notes, from testing
+
+| Site | State |
+| --- | --- |
+| YouTube | Works, but needs `--extractor-args "youtube:player_client=android"` — the default client now gets "The page needs to be reloaded". The kit adds this automatically. Verified: a podcast episode yielded a 29 KB human-written Japanese SRT in seconds. |
+| Bilibili | Returns **412** to anonymous requests regardless of User-Agent. Pass `--cookies-from-browser chrome` and stay logged in there. Multi-part pages need `--part N`. Verified: parts and audio download fine — but the tested drama upload advertised only a `danmaku` track, so there were no usable subtitles. |
+| Reuploads / fansubs | Usually burn subtitles into the picture. No track to fetch; transcription is the only route. |
+
+Safari cookies cannot be read (sandbox permissions), so use Chrome for Bilibili.
+
 ## Speed
 
 Transcription runs locally on the CPU, so it is not fast:

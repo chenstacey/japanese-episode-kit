@@ -26,6 +26,21 @@ python scripts/make_episode.py <input> --slug ep02 --title "第2集"
 - a direct audio URL — `https://example.com/ep02.mp3`
 - a page URL that `yt-dlp` can extract audio from (podcast pages, video sites)
 
+For a URL the kit first looks for a caption track the site already publishes and
+skips transcription entirely when it finds one — seconds instead of minutes.
+
+Two sites need extra care, and the failure looks like a broken URL rather than a
+permissions problem:
+
+- **Bilibili** answers anonymous requests with `412`. Add
+  `--cookies-from-browser chrome` (the user must be logged in there; Safari
+  cookies are unreadable). A page with several 分集 needs `--part N`.
+- **YouTube** needs a non-default player client, which the kit passes on its own.
+
+Most drama uploads carry their subtitles burned into the picture, or expose only
+a `danmaku` comment track. Both mean no usable subtitles, and the kit falls back
+to transcription — say so rather than reporting a failure.
+
 Output lands in `out/<slug>/`. Expect **10–15 minutes of CPU per 40 minutes of
 audio** — the transcription is the slow part and runs locally, so leave it
 running rather than assuming it hung.
