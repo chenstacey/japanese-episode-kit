@@ -42,7 +42,7 @@ require an authenticated, decrypted session.
 | Site | State |
 | --- | --- |
 | YouTube | Works, but needs `--extractor-args "youtube:player_client=android"` — the default client now gets "The page needs to be reloaded". The kit adds this automatically. Verified: a podcast episode yielded a 29 KB human-written Japanese SRT in seconds. |
-| Bilibili | Returns **412** to anonymous requests regardless of User-Agent. Pass `--cookies-from-browser chrome` and stay logged in there. Multi-part pages need `--part N`. Verified: parts and audio download fine — but the tested drama upload advertised only a `danmaku` track, so there were no usable subtitles. |
+| Bilibili | Returns **412** to anonymous requests regardless of User-Agent. Pass `--cookies-from-browser chrome` and stay logged in there. Multi-part pages need `--part N`. Verified: parts and audio download fine. Subtitles do not: yt-dlp sees only `danmaku`, and the player API that advertises CC tracks returned **another video's subtitles on both attempts** (a 15-minute drama got 26 minutes of Korean variety-show captions). `scripts/bili_subs.py` can inspect what is advertised, but treat its output as unverified. Transcribe instead. |
 | Reuploads / fansubs | Usually burn subtitles into the picture. No track to fetch; transcription is the only route. |
 
 Safari cookies cannot be read (sandbox permissions), so use Chrome for Bilibili.

@@ -1,7 +1,5 @@
 # environments and data built by setup.sh (~2 GB) — never committed
-.venv-asr/
-.venv-nlp/
-.venv-mlx/
+.venv*/
 dict/
 out/
 scripts/yt-dlp
