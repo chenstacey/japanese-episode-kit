@@ -19,6 +19,7 @@ Output, in `out/ep02/`:
 | `subtitles.srt` | Japanese transcript with timings |
 | `furigana.json` | readings per word + definitions per dictionary form |
 | `audio.m4a` | mono AAC, normalised for reliable playback |
+| `segments.json` | three proposed stretches for close study, and the words in them |
 | `episode.json` | manifest tying them together |
 
 ## Input

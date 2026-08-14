@@ -10,7 +10,8 @@ Produces, from one audio source:
 - `subtitles.srt` — Japanese transcript with timings
 - `furigana.json` — kana readings per word, plus Chinese/English definitions
 - `audio.m4a` — normalized audio (mono AAC), safe to play on iOS
-- `episode.json` — a manifest tying the three together
+- `segments.json` — three proposed stretches for close study, and the words in them
+- `episode.json` — a manifest tying them together
 
 ## Run it
 
@@ -62,36 +63,67 @@ python scripts/doctor.py
 first whenever `make_episode.py` fails — most failures are a missing dependency,
 not a bug.
 
-## Proposing study segments
+## Study segments
 
-After an episode is built, this suggests three-minute stretches worth close
-study:
+`make_episode.py` writes `segments.json` on its own — there is no separate step
+to remember. It proposes three deliberately different stretches — the densest
+dialogue, the richest vocabulary, and a balance — each cut on a natural silence
+so it never starts mid-sentence, and each carrying the words in it worth
+annotating.
+
+Use `--segment-minutes 4` to change the target length, `--no-segments` to skip.
+If the proposals fail the episode is still complete and usable; the message
+says what to fix.
+
+To regenerate them for an episode that already exists:
 
 ```bash
 python scripts/study_segments.py out/ep02 --minutes 3
 ```
 
-It writes `segments.json` with three deliberately different options — the
-densest dialogue, the richest vocabulary, and a balance — each cut on a natural
-silence so it never starts mid-sentence, and each carrying the words in it that
-are worth annotating.
+Two things about this the numbers do not show: picking words by rarity alone
+returns transcription errors and character names, so a word must also carry a
+dictionary entry and not be an interjection; and a word that *is* in the
+dictionary can still be a name (直人 is glossed "male given name"), which this
+does not catch.
 
 ## Useful flags
 
 | Flag | Effect |
 | --- | --- |
 | `--engine whisper` | Use faster-whisper instead of ReazonSpeech. Slower and weaker on noisy Japanese, but handles other languages. |
-| `--no-furigana` | Skip the readings/dictionary pack. |
+| `--no-furigana` | Skip the readings/dictionary pack (also skips segments, which read it). |
+| `--no-segments` | Skip the study-segment proposals. |
+| `--segment-minutes 4` | Target length of a study segment (default 3). |
 | `--bitrate 64k` | Smaller audio (default `96k`, about 44 MB/hour). |
 | `--start 00:01:30 --end 00:41:00` | Trim before transcribing — useful for cutting opening credits. |
 | `--out DIR` | Output root (default `out/`). |
 
 ## What to tell the user when it finishes
 
-Report the cue count, the number of words that got definitions, and the output
-path. If many cues are far longer than their text (the script warns about this),
-say so — it usually means the source audio has speech the recognizer dropped, and
-those stretches will feel out of sync during playback.
+Report the cue count, the number of words that got definitions, how many study
+segments were proposed, and the output path. If many cues are far longer than
+their text (the script warns about this), say so — it usually means the source
+audio has speech the recognizer dropped, and those stretches will feel out of
+sync during playback.
+
+Two things worth flagging, because they are quiet failures:
+
+- **The title.** Some sites hand `yt-dlp` no usable name and the file arrives
+  called `download`. The kit refuses to use that as a title and says so — pass
+  `--title` and rerun, or set the title when publishing.
+- **A missing `segments.json`.** The episode still plays, but a reader gets no
+  study proposals. Run `python scripts/doctor.py` and rerun `setup.sh`.
+
+## When the kit was installed a while ago
+
+`setup.sh` is safe to rerun and is the fix for most "it used to work" failures:
+it reinstalls the NLP requirements every time, so an environment built against
+an older version of this kit catches up. Run it after pulling.
+
+`doctor.py` checks that Japanese word frequencies actually resolve, not merely
+that the library imports — importing `wordfreq` succeeds without MeCab and only
+fails once it tokenizes Japanese, which is deep inside the segment proposals.
 
 ## Things worth knowing
 

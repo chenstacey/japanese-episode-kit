@@ -35,15 +35,17 @@ else
 fi
 
 say "NLP environment (.venv-nlp)"
-if [ -x ".venv-nlp/bin/python" ] && \
-   .venv-nlp/bin/python -c "import fugashi" 2>/dev/null; then
-  echo "  already installed"
-else
+# Create the venv if it is missing, but install every time. Skipping the
+# install when one import succeeds leaves an environment built against an older
+# requirements file permanently out of date: an existing venv passed the
+# `import fugashi` check while missing wordfreq and MeCab, so segment
+# proposals crashed on a machine that had "already installed" this kit.
+if [ ! -x ".venv-nlp/bin/python" ]; then
   python3 -m venv .venv-nlp
   .venv-nlp/bin/python -m pip install -q --upgrade pip
-  .venv-nlp/bin/pip install -q -r requirements/nlp.txt
-  echo "  done"
 fi
+.venv-nlp/bin/pip install -q -r requirements/nlp.txt
+echo "  up to date"
 
 say "yt-dlp (needed only for URL inputs)"
 if command -v yt-dlp >/dev/null 2>&1; then

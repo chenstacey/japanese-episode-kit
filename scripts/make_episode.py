@@ -194,6 +194,27 @@ def build_pack(srt: Path, out_json: Path):
          "-o", str(out_json), "--dict-dir", str(DICT_DIR)])
 
 
+def propose_segments(dest: Path, minutes: float) -> bool:
+    """Suggest stretches worth close study. Never fatal.
+
+    This runs as part of the build rather than as a step to remember: an
+    episode published without segments.json gives the reader no study
+    candidates at all, and the failure is silent from their side.
+    """
+    script = HERE / "study_segments.py"
+    result = subprocess.run(
+        [venv_python(VENV_NLP), str(script), str(dest), "--minutes", str(minutes)],
+        capture_output=True, text=True)
+    if result.returncode == 0:
+        return True
+    detail = (result.stderr or result.stdout).strip().splitlines()
+    print("      could not propose study segments (the episode is still fine):")
+    for line in detail[-3:]:
+        print(f"        {line}")
+    print("        fix with: bash scripts/setup.sh")
+    return False
+
+
 # ---------------------------------------------------------------- checks
 
 def warn_about_loose_cues(srt: Path):
@@ -255,6 +276,10 @@ def main():
     ap.add_argument("--end", help="ffmpeg -to, e.g. 00:41:00")
     ap.add_argument("--chunk-sec", type=float, default=600.0)
     ap.add_argument("--overlap", type=float, default=15.0)
+    ap.add_argument("--no-segments", action="store_true",
+                    help="skip the study-segment proposals")
+    ap.add_argument("--segment-minutes", type=float, default=3.0,
+                    help="target length of a study segment (default 3)")
     args = ap.parse_args()
 
     for tool in ("ffmpeg", "ffprobe"):
@@ -279,6 +304,12 @@ def main():
 
         slug = args.slug or source.stem.replace(" ", "-").lower()
         title = args.title or source.stem
+        # yt-dlp falls back to naming its output "download" when a site gives it
+        # no usable title, and that string then rides all the way into the
+        # library as the episode name. A slug the user chose is a better guess
+        # than a placeholder; failing that, say plainly that it needs naming.
+        if title.lower() in {"download", "downloads", "video", "audio", "index"}:
+            title = args.slug or "未命名 — 需要 --title"
         dest = Path(args.out) / slug
         dest.mkdir(parents=True, exist_ok=True)
 
@@ -302,12 +333,17 @@ def main():
             transcribe(audio, srt, args.engine, args.chunk_sec, args.overlap)
 
         pack = dest / "furigana.json"
+        segments_ok = False
         if args.no_furigana:
             pack = None
             print("[3/3] skipping furigana pack")
         else:
             print("[3/3] building furigana + dictionary pack")
             build_pack(srt, pack)
+            # segment proposals read the pack, so they have to follow it
+            if not args.no_segments:
+                print("      proposing study segments")
+                segments_ok = propose_segments(dest, args.segment_minutes)
 
     cue_count = sum(1 for line in srt.read_text(encoding="utf-8").splitlines()
                     if "-->" in line)
@@ -325,6 +361,7 @@ def main():
         "audio": audio.name,
         "srt": srt.name,
         "pack": pack.name if pack else None,
+        "segments": "segments.json" if segments_ok else None,
         "transcript_source": transcript_source,
     }
     (dest / "episode.json").write_text(
@@ -334,6 +371,12 @@ def main():
 
     print(f"\ndone in {(time.time()-started)/60:.1f} min -> {dest}")
     print(f"  {cue_count} cues, {defined} words with definitions")
+    if segments_ok:
+        proposed = json.loads((dest / "segments.json").read_text(encoding="utf-8"))
+        print(f"  {len(proposed.get('segments', []))} study segments proposed")
+    if title.startswith("未命名"):
+        print("  note: the source gave no usable title — rerun with --title, or")
+        print("        set it when publishing")
     if loose:
         print(f"\n  note: {len(loose)} cues are much longer than their text.")
         print("  That usually means speech the recogniser missed; those stretches")

@@ -61,6 +61,12 @@ check_tool("yt-dlp", "bash scripts/setup.sh  (only needed for URL inputs)",
 print("\nenvironments")
 check_venv(ROOT / ".venv-asr", "reazonspeech.espnet.asr", ".venv-asr")
 check_venv(ROOT / ".venv-nlp", "fugashi", ".venv-nlp")
+# wordfreq imports fine on its own but reaches for MeCab only when it tokenizes
+# Japanese, so importing it proves nothing — scoring a real word is the check
+# that catches a venv missing mecab-python3/ipadic.
+check_venv(ROOT / ".venv-nlp",
+           "wordfreq, sys; wordfreq.zipf_frequency('本', 'ja')",
+           ".venv-nlp japanese word frequencies")
 
 print("\ndictionaries")
 check_file(ROOT / "dict" / "jmdict.sqlite", "jmdict.sqlite (English)",
