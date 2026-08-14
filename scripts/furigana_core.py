@@ -69,7 +69,11 @@ def tokenize(text: str):
         if f.pos1 in SKIP_POS or not any(c.isalnum() for c in base):
             base = None
 
-        tokens.append({"surface": surface, "reading": reading, "base": base})
+        # pos travels with the token so downstream steps can tell an
+        # interjection from a verb — picking study vocabulary by rarity alone
+        # surfaces ううん and うわあ alongside the words worth learning
+        tokens.append({"surface": surface, "reading": reading,
+                       "base": base, "pos": f.pos1})
     return tokens
 
 

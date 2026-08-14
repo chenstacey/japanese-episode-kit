@@ -62,6 +62,20 @@ python scripts/doctor.py
 first whenever `make_episode.py` fails — most failures are a missing dependency,
 not a bug.
 
+## Proposing study segments
+
+After an episode is built, this suggests three-minute stretches worth close
+study:
+
+```bash
+python scripts/study_segments.py out/ep02 --minutes 3
+```
+
+It writes `segments.json` with three deliberately different options — the
+densest dialogue, the richest vocabulary, and a balance — each cut on a natural
+silence so it never starts mid-sentence, and each carrying the words in it that
+are worth annotating.
+
 ## Useful flags
 
 | Flag | Effect |
