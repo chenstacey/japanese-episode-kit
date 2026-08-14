@@ -72,20 +72,42 @@ def snap_points(cues: list) -> list:
     return points
 
 
+# A leading part-of-speech label: 形, 名·形动, 他上一, 自五, サ変 …
+POS_LABEL = re.compile(
+    r"^(?:[名動动形副助代数量連连介嘆叹接自他]|サ変|形动|形動)"
+    r"[\w·・、]{0,4}\s+")
+
+
 def shorten_gloss(text: str) -> str:
     """Trim a dictionary gloss down to something that fits on a card.
 
     Wiktionary entries arrive with a grammar label and worked examples attached
     ("他上一 1. 借。 本を借りる 借书。 2. 租。 …"). The full text still belongs in
     the lookup sheet; a study card needs the first sense and nothing else.
+
+    Order matters: the label has to come off before the numbered senses are
+    split, or a gloss like "形 1. 可惜，遗憾。 …" cuts at " 1. " and leaves the
+    card reading just "形".
     """
-    text = re.sub(r"^[^\s]{1,4}[一二三五]\s+", "", text.strip())   # 他上一, 自五 …
-    text = re.sub(r"^\d+\.\s*", "", text)
+    text = POS_LABEL.sub("", text.strip())
+    text = re.sub(r"^\d+\.\s*", "", text)          # the first sense's marker
+    text = re.split(r"\s+\d+\.\s", text)[0]        # stop before the second
     # stop at the first example sentence — they start with Japanese script
     text = re.split(r"\s+(?=[ぁ-んァ-ヶ一-鿿]{2,}[はがをにでへ])", text)[0]
-    text = re.split(r"\s+\d+\.\s", text)[0]
-    text = text.strip(" ；;，,。")
-    return text[:40]
+    return text.strip(" ；;，,。")[:40]
+
+
+def best_gloss(glosses) -> str:
+    """The first gloss that survives trimming with something left to read.
+
+    Some entries are a bare grammar label with the meaning only in a later
+    sense; keeping an empty card would be worse than showing nothing.
+    """
+    for gloss in glosses or []:
+        short = shorten_gloss(gloss)
+        if short:
+            return short
+    return ""
 
 
 def analyse(cues: list, pack: dict, start: float, end: float, zipf) -> dict:
@@ -109,10 +131,13 @@ def analyse(cues: list, pack: dict, start: float, end: float, zipf) -> dict:
                 continue
             if zipf(base) >= RARE:
                 continue
+            gloss = best_gloss(entry.get("glosses"))
+            if not gloss:
+                continue          # nothing readable to put on a card
             words[base] = {
                 "base": base,
                 "reading": entry.get("reading") or token.get("reading"),
-                "gloss": shorten_gloss((entry.get("glosses") or [""])[0]),
+                "gloss": gloss,
                 "lang": entry.get("lang", "en"),
                 "at": round(cue["start"], 2),
             }
