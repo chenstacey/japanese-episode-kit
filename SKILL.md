@@ -54,9 +54,9 @@ Expect **10–15 minutes of CPU per 40 minutes of audio**. It is not hung.
 **4. Translate it** — see *Adding Chinese translations*. Not optional: this is
 what the reading view shows under each line.
 
-**5. Rewrite the English definitions** — see *Rewriting the English
-definitions*. Roughly a quarter of an episode's vocabulary falls back to
-English, concentrated in the words most worth studying.
+**5. Rewrite the unusable definitions** — see *Rewriting the unusable
+definitions*. Run it twice if needed: the second pass picks up whatever the
+first left behind.
 
 **6. Report** — see *What to tell the user when it finishes*.
 
@@ -172,30 +172,37 @@ Rules that matter more than they look:
 Nothing else needs rebuilding afterwards: the Japanese is untouched, so the
 furigana pack and the study segments stay valid.
 
-## Rewriting the English definitions
+## Rewriting the unusable definitions
 
-Definitions come from two dictionaries: Chinese Wiktionary where it has the
-word, JMdict's English where it does not. The gap is not spread evenly — the
-rarer a word is, the less likely Wiktionary has it, so the English fallback
-lands hardest on exactly the words worth studying. On one episode: 23% of all
-entries, but 34% of the study keywords.
+Two dictionaries feed an episode, and both leave work behind.
+
+The English fallback (JMdict, used where Chinese Wiktionary lacks the word) is
+not spread evenly: the rarer a word is, the less likely Wiktionary has it, so
+it lands hardest on exactly the words worth studying. On one episode, 23% of
+all entries but 34% of the study keywords.
+
+The Chinese is not uniformly usable either. Wiktionary writes for a page, not a
+card, so entries arrive with grammar labels, bracketed usage notes, worked
+examples and romaji cross-references — and a few are the wrong word outright
+(しゃべる, "to chat", came through glossed as シャベル, a shovel). The export
+picks up both kinds.
 
 ```bash
 python scripts/polish_glosses.py export out/ep06
 ```
 
-That lists every entry still in English, 60 per part, each line carrying the
-word, its reading, the English, and **a line from this episode where the word
-is spoken**. Write the Chinese beside each part as `partN.zh.txt`, then:
+That lists every definition that does not work as a card, 60 per part, each
+line carrying the word, its reading, the current definition, and **a line from
+this episode where the word is spoken**. Write the Chinese beside each part as `partN.zh.txt`, then:
 
 ```bash
 python scripts/polish_glosses.py import out/ep06
 ```
 
-The example is there because the English alone is often the wrong sense. In one
-episode `あんまり` came through as "remainder; remnant; rest" — correct for the
-noun 余り, useless for the adverb actually spoken. Read the example and write
-the sense that fits it.
+The example is there because the existing definition is often the wrong sense.
+In one episode `あんまり` came through as "remainder; remnant; rest" — correct
+for the noun 余り, useless for the adverb actually spoken. Read the example and
+write the sense that fits it; where the two disagree, the example wins.
 
 Keep definitions short: they are shown on study cards, so ten characters or so,
 at most two senses, no part-of-speech labels or examples. The English is kept
@@ -232,8 +239,8 @@ see from the output directory:
    Those stretches are poor choices for close study.
 4. **Translation coverage** — lines filled per part, and any part that came
    back short.
-5. **Definition coverage** — what share of entries ended up Chinese, before
-   and after the rewrite.
+5. **Definition coverage** — how many definitions were rewritten, and what
+   share of entries ended up Chinese.
 6. **The title**, as it will appear in the library.
 
 Two things worth flagging, because they are quiet failures:

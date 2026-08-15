@@ -1,12 +1,18 @@
 #!/usr/bin/env python3
-"""Replace an episode's English fallback definitions with Chinese ones.
+"""Rewrite the definitions that do not work as study cards.
 
-Definitions come from two dictionaries: Chinese Wiktionary where it has the
-word, JMdict's English where it does not. Chinese covers roughly three quarters
-of an episode — but the gap is not spread evenly. The rarer a word is, the less
-likely Wiktionary has it, so the English fallback lands hardest on exactly the
-words picked out as worth studying: about a quarter of an episode's entries,
-but a third of its study keywords.
+Two dictionaries feed an episode: Chinese Wiktionary where it has the word,
+JMdict's English where it does not. Both leave work behind.
+
+The English fallback is not spread evenly — the rarer a word is, the less
+likely Wiktionary has it, so it lands hardest on exactly the words picked out
+as worth studying: on one episode, a quarter of all entries but a third of the
+study keywords.
+
+The Chinese is not uniformly usable either. Wiktionary writes for a page, not a
+card, so entries arrive carrying grammar labels, bracketed usage notes, worked
+examples and romaji cross-references. A few are the wrong word outright —
+しゃべる, "to chat", came through glossed as シャベル, a shovel.
 
 The writing is done by whoever runs this; the script only takes the entries out
 and puts them back.
@@ -31,9 +37,11 @@ HERE = Path(__file__).resolve().parent
 VENV_NLP = HERE.parent / ".venv-nlp"
 PER_PART = 60
 
-PROMPT = """请把下面这些日语单词的英文释义改写成中文释义。
+PROMPT = """请为下面这些日语单词写简短的中文释义。
 
-这些词在中文维基词典里查不到,只能退回英文,现在需要中文释义。
+这些词现有的释义不适合直接放在单词卡上:有的只有英文(中文词典查不到),
+有的中文释义带着词性标注、括号说明或例句,还有的干脆匹配错了词。
+下面给出的是它们现有的释义,仅供参考 —— 如果和例句对不上,以例句为准。
 
 【输出格式】必须严格遵守
 - 每行输出:`编号. 中文释义`(编号后面是英文句点加一个空格)
@@ -47,7 +55,7 @@ PROMPT = """请把下面这些日语单词的英文释义改写成中文释义�
 - 只写词义本身,不要写词性、不要举例、不要加括号说明
 - 参考给出的例句判断这个词在剧里的实际用法,优先写贴合的义项
 
-【输入格式】每行是:编号. 单词(读音) — 英文释义 ‖ 例句
+【输入格式】每行是:编号. 单词(读音) — 现有释义 ‖ 剧中例句
 """
 
 REPLY_LINE = re.compile(r"^\s*(\d+)\s*(?:[.、:：．)\]]\s*|\s+)(.+?)\s*$")
@@ -57,11 +65,41 @@ def todo_dir(directory: Path) -> Path:
     return directory / "glosses.todo"
 
 
-def english_entries(pack: dict) -> list:
-    """Entries still relying on the English fallback, commonest first is not
-    useful here — order by the word so the batches are stable across runs."""
+KANA = re.compile(r"[ぁ-んァ-ヶ]")
+
+# Wiktionary's Chinese entries are written for a page, not a card: grammar
+# labels, bracketed usage notes, worked examples, cross-references in romaji.
+# Some are also simply the wrong word — しゃべる ("to chat") arrived glossed as
+# シャベル, a shovel.
+CRUFT = re.compile(r"[【（(]|\d\.\s|[；;]\s*\S+\s+\(")
+
+
+def needs_work(base: str, entry: dict) -> bool:
+    glosses = entry.get("glosses") or []
+    if not glosses:
+        return False
+    # A single kana is a particle or an interjection. It never becomes a study
+    # keyword, and Wiktionary answers it with an essay about the syllable —
+    # writing those is effort spent on cards nobody will see.
+    if len(base) < 2:
+        return False
+    if entry.get("lang") != "zh":
+        return True                       # English fallback
+    if entry.get("gloss_source") == "written":
+        return False                      # already rewritten
+    first = glosses[0]
+    if len(first) > 24 or CRUFT.search(first):
+        return True
+    # kana in the definition of a word that has none is usually a cross
+    # reference or a mismatched entry rather than a meaning
+    return bool(KANA.search(first) and not KANA.search(base))
+
+
+def entries_to_write(pack: dict) -> list:
+    """Everything whose definition is unusable as a study card, ordered by the
+    word so batches stay stable across runs."""
     return sorted(base for base, entry in pack.get("dict", {}).items()
-                  if entry.get("lang") != "zh" and entry.get("glosses"))
+                  if needs_work(base, entry))
 
 
 def example_for(base: str, pack: dict, limit: int = 28) -> str:
@@ -75,9 +113,9 @@ def example_for(base: str, pack: dict, limit: int = 28) -> str:
 
 def do_export(directory: Path):
     pack = json.loads((directory / "furigana.json").read_text(encoding="utf-8"))
-    bases = english_entries(pack)
+    bases = entries_to_write(pack)
     if not bases:
-        print("nothing to do — every entry already has a Chinese definition")
+        print("nothing to do — every definition already reads as a study card")
         return
 
     out = todo_dir(directory)
@@ -93,16 +131,16 @@ def do_export(directory: Path):
         for n, base in enumerate(chunk, 1):
             entry = pack["dict"][base]
             reading = entry.get("reading") or ""
-            english = "; ".join(entry.get("glosses", [])[:3])
+            current = "; ".join(entry.get("glosses", [])[:3])[:120]
             example = example_for(base, pack)
-            lines.append(f"{n}. {base}({reading}) — {english}"
+            lines.append(f"{n}. {base}({reading}) — {current}"
                          + (f" ‖ {example}" if example else ""))
         target = out / f"part{number}.txt"
         target.write_text(PROMPT.format(count=len(chunk)) + "\n" + "\n".join(lines) + "\n",
                           encoding="utf-8")
         written.append((target, len(chunk)))
 
-    print(f"{len(bases)} entries still in English -> {len(written)} part(s) in {out}/")
+    print(f"{len(bases)} definitions need writing -> {len(written)} part(s) in {out}/")
     for target, count in written:
         print(f"  {target.name}  ({count} entries)")
     print("\nWrite each part's Chinese beside it as partN.zh.txt, then run:")
@@ -112,7 +150,7 @@ def do_export(directory: Path):
 def do_import(directory: Path, minutes: float):
     pack_path = directory / "furigana.json"
     pack = json.loads(pack_path.read_text(encoding="utf-8"))
-    bases = english_entries(pack)
+    bases = entries_to_write(pack)
     source = todo_dir(directory)
     replies = sorted(source.glob("part*.zh.txt"),
                      key=lambda p: int(re.search(r"\d+", p.name).group()))
