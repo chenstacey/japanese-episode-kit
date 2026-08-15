@@ -1,6 +1,6 @@
 ---
 name: japanese-episode-kit
-description: Turn a Japanese audio source into study material — a timed SRT transcript plus a furigana/dictionary pack. Use when the user provides an audio file, an audio URL, a podcast episode, or a video link and wants a transcript, subtitles, furigana readings, or vocabulary data for Japanese listening practice.
+description: Turn a Japanese audio source into complete study material — a timed transcript, kana readings, Chinese/English definitions, proposed segments for close listening, and Chinese translations of every line. Use when the user provides an audio file, an audio URL, a podcast episode, or a video link (Bilibili, YouTube) and wants it "processed", or asks for a transcript, subtitles, furigana readings, translations, or vocabulary data for Japanese listening practice.
 ---
 
 # Japanese Episode Kit
@@ -13,13 +13,52 @@ Produces, from one audio source:
 - `segments.json` — three proposed stretches for close study, and the words in them
 - `episode.json` — a manifest tying them together
 
-## Run it
+## The whole job, in order
 
-Everything is one command. Do not run the individual stages by hand.
+When asked to "process this episode" from a link or a file, run all of this —
+the transcript on its own is half a deliverable, because the reading view stays
+blank without the Chinese.
+
+**1. Catch the tools up.** Always, not just the first time.
 
 ```bash
-python scripts/make_episode.py <input> --slug ep02 --title "第2集"
+cd <kit> && git pull && bash scripts/setup.sh && python3 scripts/doctor.py
 ```
+
+`doctor.py` must come back clean before going on. `setup.sh` is cheap when
+there is nothing to do and is the fix for most "it worked last time" failures.
+
+**2. Find out what the link actually contains** — only for a multi-part page
+(Bilibili 分集, a playlist). Run the command from step 3 without `--part`, read
+the list it prints, and pick the number matching the episode asked for. Getting
+this wrong transcribes the wrong episode and costs the full ASR time.
+
+**3. Build it.**
+
+```bash
+python3 scripts/make_episode.py "<url or file>" \
+  --slug ep06 --title "第6集" \
+  --end 00:44:00 \
+  --cookies-from-browser chrome --force-asr
+```
+
+- `--slug` / `--title` — always pass both. Left to itself the kit takes the name
+  from the file, and some sites hand `yt-dlp` nothing usable.
+- `--end` (and `--start`) — trim before transcribing, so credits and trailing
+  filler do not cost ASR time. Ask for these if the user mentioned a length.
+- `--cookies-from-browser chrome` — required for Bilibili; see below.
+- `--force-asr` — **use it on Bilibili.** See below.
+
+Expect **10–15 minutes of CPU per 40 minutes of audio**. It is not hung.
+
+**4. Translate it** — see *Adding Chinese translations*. Not optional: this is
+what the reading view shows under each line.
+
+**5. Report** — see *What to tell the user when it finishes*.
+
+Output lands in `out/<slug>/`, ready to publish.
+
+## Input
 
 `<input>` is any of:
 
@@ -36,15 +75,18 @@ permissions problem:
 - **Bilibili** answers anonymous requests with `412`. Add
   `--cookies-from-browser chrome` (the user must be logged in there; Safari
   cookies are unreadable). A page with several 分集 needs `--part N`.
+
+  Also pass **`--force-asr`**. Bilibili advertises CC subtitle tracks that are
+  not reliably its own: on two separate attempts the API returned *another
+  video's* subtitles — a 15-minute drama came back with 26 minutes of Korean
+  variety-show captions. Without `--force-asr` the kit may take that track and
+  skip transcription, producing an episode whose subtitles belong to something
+  else entirely. Transcribing costs ten minutes; this costs the whole episode.
 - **YouTube** needs a non-default player client, which the kit passes on its own.
 
 Most drama uploads carry their subtitles burned into the picture, or expose only
 a `danmaku` comment track. Both mean no usable subtitles, and the kit falls back
 to transcription — say so rather than reporting a failure.
-
-Output lands in `out/<slug>/`. Expect **10–15 minutes of CPU per 40 minutes of
-audio** — the transcription is the slow part and runs locally, so leave it
-running rather than assuming it hung.
 
 ## Before the first run
 
@@ -140,11 +182,21 @@ furigana pack and the study segments stay valid.
 
 ## What to tell the user when it finishes
 
-Report the cue count, the number of words that got definitions, how many study
-segments were proposed, and the output path. If many cues are far longer than
-their text (the script warns about this), say so — it usually means the source
-audio has speech the recognizer dropped, and those stretches will feel out of
-sync during playback.
+Report all of this, without being asked — each line is something they cannot
+see from the output directory:
+
+1. **Cue count, defined words, segments proposed**, and the output path.
+2. **Which part of a multi-part page was used**, if the source had several. This
+   is the one mistake that silently produces a perfectly good episode of the
+   wrong content.
+3. **Loose cues.** The script warns when cues are far longer than their text.
+   Pass the warning on with its timestamps: it means dialogue the recognizer
+   missed, and during playback the highlight sits still while other lines are
+   spoken — which reads as broken sync even though the timings are right.
+   Those stretches are poor choices for close study.
+4. **Translation coverage** — lines filled per part, and any part that came
+   back short.
+5. **The title**, as it will appear in the library.
 
 Two things worth flagging, because they are quiet failures:
 
@@ -173,7 +225,8 @@ fails once it tokenizes Japanese, which is deep inside the segment proposals.
 - **ReazonSpeech is the default** because it is markedly more robust than
   Whisper on noisy Japanese dialogue. Demucs vocal separation was tested and
   only helped Whisper, so it is not part of the pipeline.
-- **No translation.** The transcript is Japanese only. If the source already has
-  a bilingual SRT, pass it with `--srt` and transcription is skipped.
+- **Transcription produces Japanese only.** The Chinese is a separate step you
+  do yourself (*Adding Chinese translations*). If the source already has a
+  bilingual SRT, pass it with `--srt` and both steps are skipped.
 - **Downloading**: `yt-dlp` fetches from many sites. Only download material you
   have the right to use; that judgement is the user's, not this script's.
