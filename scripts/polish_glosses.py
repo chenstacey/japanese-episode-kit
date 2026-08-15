@@ -72,6 +72,7 @@ KANA = re.compile(r"[ぁ-んァ-ヶ]")
 # Some are also simply the wrong word — しゃべる ("to chat") arrived glossed as
 # シャベル, a shovel.
 CRUFT = re.compile(r"[【（(]|\d\.\s|[；;]\s*\S+\s+\(")
+XREF = re.compile(r"^[ぁ-んァ-ヶー]{2,}\s*[：:、,]")
 
 
 def needs_work(base: str, entry: dict) -> bool:
@@ -89,6 +90,12 @@ def needs_work(base: str, entry: dict) -> bool:
         return False                      # already rewritten
     first = glosses[0]
     if len(first) > 24 or CRUFT.search(first):
+        return True
+    # A definition opening with a Japanese word and a separator is pointing at
+    # another entry, not defining this one — and sometimes at the wrong entry:
+    # しゃべる ("to chat") is defined as シャベル, a shovel. The base being kana
+    # too is why the rule below misses it.
+    if XREF.match(first):
         return True
     # kana in the definition of a word that has none is usually a cross
     # reference or a mismatched entry rather than a meaning
